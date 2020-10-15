@@ -33,6 +33,7 @@ namespace QtmVideoGridRender
 
                     if (!File.Exists(outputfilepath))
                     {
+                        // TODO::: Allow for Oqus, Arqus video files too
                         var avifiles = Directory.GetFiles(directory, filenamewithoutext + "_Miqus*.avi");
                         if (avifiles.Length == 0)
                         {
@@ -221,6 +222,7 @@ namespace QtmVideoGridRender
                 // Determine how many rows and columns it should contain
                 Size gridSize = GetOutputGridSizes(avifiles.Length);
 
+                // TODO::: Be able to specify output size and resize all bitmaps accordingly.
                 Size outputSize = new Size(largestResolution.Width * gridSize.Width, largestResolution.Height * gridSize.Height);
 
                 Console.WriteLine("Writing file: " + outputfilename + " " + outputSize.Width.ToString() + "x" + outputSize.Height.ToString() + " Frequency: " + maxFrameRate + " Bitrate: " + minBitRate.ToString());

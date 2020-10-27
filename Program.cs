@@ -235,15 +235,7 @@ namespace QtmVideoGridRender
                 writer.BitRate = minBitRate;
                 writer.VideoCodec = VideoCodec.H264;
                 writer.AudioCodec = AudioCodec.None;
-                ////writer.VideoCodec = VideoCodec.MsVideo1;
-                ////writer.PixelFormat = AVPixelFormat.FormatRgb555LittleEndian;
                 writer.Open(outputfilename);
-
-                //var aviWriter = new Render.AVIWriter();
-                //aviWriter.Codec = "msvc";
-                //aviWriter.Quality = 100;
-                //aviWriter.FrameRate = (int)maxFrameRate;
-                //aviWriter.Open(outputfilename, outputSize.Width, outputSize.Height);
 
                 Bitmap[] bitmaps = new Bitmap[afis.Count];
 
@@ -266,7 +258,6 @@ namespace QtmVideoGridRender
 
                             try
                             {
-                                //bitmap = afi.reader.GetNextFrame();
                                 bitmap = afi.reader.ReadVideoFrame();
                                 //bitmap.Save(afi.filename + "_" + frameNumberToWrite.ToString() + ".bmp");
                             }
@@ -283,7 +274,6 @@ namespace QtmVideoGridRender
                             {
                                 try
                                 {
-                                    //bitmap = afi.reader.GetNextFrame();
                                     bitmap = afi.reader.ReadVideoFrame();
                                 }
                                 catch (Exception)
@@ -345,12 +335,9 @@ namespace QtmVideoGridRender
                         }
 
                         writer.WriteVideoFrame(bigBitmap);
-                        //aviWriter.AddFrame(bigBitmap);
                     }
                 }
                 writer.Close();
-
-                //aviWriter.Close();
             }
             catch (Exception e)
             {
@@ -358,6 +345,11 @@ namespace QtmVideoGridRender
             }
         }
 
+        /// <summary>
+        /// Returns a grid size depending on number of files
+        /// </summary>
+        /// <param name="numberOfFiles"></param>
+        /// <returns></returns>
         private static Size GetOutputGridSizes(int numberOfFiles)
         {
             int countOnX;
@@ -428,11 +420,3 @@ namespace QtmVideoGridRender
         }
     }
 }
-
-/*
-            using (var newTagFile = TagLib.File.Create(@"c:\temp\new.avi"))
-            {
-                tagFile.Tag.CopyTo(newTagFile.Tag, true);
-                newTagFile.Save();
-            }
-*/

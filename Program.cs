@@ -17,6 +17,12 @@ namespace QtmVideoGridRender
             return (byte[])converter.ConvertTo(img, typeof(byte[]));
         }
 
+        enum TimecodePosition
+        {
+            TopLeft,
+            Center
+        }
+
         static void Main(string[] args)
         {
             try
@@ -111,6 +117,10 @@ namespace QtmVideoGridRender
             int maxBitRate = int.MinValue;
             List<AviFileInfo> afis = new List<AviFileInfo>();
             int timecodeFoundIndex = -1;
+
+            Font timecodeTextFont = new Font("Tahoma", 70);
+            TimecodePosition timecodePosition = TimecodePosition.Center;
+
             foreach (var file in avifiles)
             {
                 try
@@ -314,9 +324,19 @@ namespace QtmVideoGridRender
                             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                            RectangleF rectf = new RectangleF(10, 10, 1000, 200);
+
                             string timeToWrite = (timecodeFoundIndex >= 0) ? string.Format($"{timestamp.ToString("HH:mm:ss")}.{timestampFrame:D2}") : string.Format($"{timestamp.ToString("HH:mm:ss")}");
-                            g.DrawString(timeToWrite, new Font("Tahoma", 60), Brushes.White, rectf);
+                            var size = g.MeasureString(timeToWrite, timecodeTextFont);
+                            RectangleF rect = new RectangleF(10, 10, size.Width, size.Height);
+                            if (timecodePosition == TimecodePosition.Center)
+                            {
+                                rect.X = (outputSize.Width / 2) - (size.Width / 2);
+                                rect.Y = (outputSize.Height / 2) - (size.Height / 2);
+                                rect.Width = size.Width;
+                                rect.Height = size.Height;
+                            }
+                            g.FillRectangle(Brushes.Black, rect);
+                            g.DrawString(timeToWrite, timecodeTextFont, Brushes.White, rect);
 
                             g.Flush();
                         }

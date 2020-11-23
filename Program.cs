@@ -268,20 +268,20 @@ namespace QtmVideoGridRender
                 double timestampCounter = 0;
 
                 // Determine how many rows and columns it should contain
-                Size gridSize = GetOutputGridSizes(aviFiles.Length);
+                var gridSizeAndScale = GetOutputGridSizes(aviFiles.Length);
 
                 // TODO::: Be able to specify output size and resize all bitmaps accordingly.
-                Size outputSize = new Size(largestResolution.Width * gridSize.Width, largestResolution.Height * gridSize.Height);
+                Size outputSize = new Size((int)(largestResolution.Width * gridSizeAndScale.X * gridSizeAndScale.Scale), (int)(largestResolution.Height * gridSizeAndScale.Y * gridSizeAndScale.Scale));
 
                 Console.WriteLine("Writing file: " + outputfilename + " " + outputSize.Width.ToString() + "x" + outputSize.Height.ToString() + " Frequency: " + maxFrameRate + " Bitrate: " + minBitRate.ToString());
 
 
                 var writer = new VideoFileWriter();
-                writer.Width = largestResolution.Width * gridSize.Width;
-                writer.Height = largestResolution.Height * gridSize.Height;
+                writer.Width = outputSize.Width;
+                writer.Height = outputSize.Height;
                 writer.FrameRate = new Rational(maxFrameRate);
                 writer.BitRate = minBitRate;
-                writer.VideoCodec = VideoCodec.Mpeg4;// H264;
+                writer.VideoCodec = VideoCodec.Mpeg4;
                 writer.AudioCodec = AudioCodec.None;
                 writer.Open(outputfilename);
 
@@ -311,6 +311,7 @@ namespace QtmVideoGridRender
                             try
                             {
                                 bitmap = afi.reader.ReadVideoFrame();
+                                bitmap = (gridSizeAndScale.Scale != 1.0) ? ResizeImage(bitmap, (int)(bitmap.Width * gridSizeAndScale.Scale), (int)(bitmap.Height * gridSizeAndScale.Scale)) : bitmap;
                                 //bitmap.Save(afi.filename + "_" + frameNumberToWrite.ToString() + ".bmp");
                             }
                             catch (Exception)
@@ -327,6 +328,7 @@ namespace QtmVideoGridRender
                                 try
                                 {
                                     bitmap = afi.reader.ReadVideoFrame();
+                                    bitmap = (gridSizeAndScale.Scale != 1.0) ? ResizeImage(bitmap, (int)(bitmap.Width * gridSizeAndScale.Scale), (int)(bitmap.Height * gridSizeAndScale.Scale)) : bitmap;
                                 }
                                 catch (Exception)
                                 {
@@ -351,12 +353,12 @@ namespace QtmVideoGridRender
                             {
                                 graphicsContext.DrawImage(bitmaps[index], coordx, coordy);
                             }
-                            coordx += afis[index].reader.Width;
-                            if (indexOnLine++ >= gridSize.Width)
+                            coordx += bitmaps[index].Width;
+                            if (indexOnLine++ >= gridSizeAndScale.X)
                             {
-                                indexOnLine = 0;
+                                indexOnLine = 1;
                                 coordx = 0;
-                                coordy += afis[index].reader.Height;
+                                coordy += bitmaps[index].Height;
                             }
                         }
 
@@ -413,78 +415,63 @@ namespace QtmVideoGridRender
             afis.Clear();
         }
 
+        class GridSize
+        {
+            public GridSize(int x, int y, double scale = 1.0)
+            {
+                X = x;
+                Y = y;
+                Scale = scale;
+            }
+            public int X;
+            public int Y;
+            public double Scale;
+        }
+
         /// <summary>
         /// Returns a grid size depending on number of files
         /// </summary>
         /// <param name="numberOfFiles"></param>
         /// <returns></returns>
-        private static Size GetOutputGridSizes(int numberOfFiles)
+        private static GridSize GetOutputGridSizes(int numberOfFiles)
         {
-            int countOnX;
-            int countOnY;
             switch (numberOfFiles)
             {
                 case 1:
-                    countOnX = 1;
-                    countOnY = 1;
-                    break;
+                    return new GridSize(1, 1);
                 case 2:
-                    countOnX = 2;
-                    countOnY = 1;
-                    break;
+                    return new GridSize(2, 1);
                 case 3:
-                    countOnX = 3;
-                    countOnY = 1;
-                    break;
+                    return new GridSize(3, 1);
                 case 4:
-                    countOnX = 2;
-                    countOnY = 2;
-                    break;
+                    return new GridSize(2, 2);
                 case 5:
                 case 6:
-                    countOnX = 3;
-                    countOnY = 2;
-                    break;
+                    return new GridSize(3, 2);
                 case 7:
                 case 8:
-                    countOnX = 4;
-                    countOnY = 2;
-                    break;
+                    return new GridSize(4, 2);
                 case 9:
-                    countOnX = 3;
-                    countOnY = 3;
-                    break;
+                    return new GridSize(3, 3);
                 case 10:
-                    countOnX = 5;
-                    countOnY = 2;
-                    break;
+                    return new GridSize(5, 2, 0.5);
                 case 11:
                 case 12:
-                    countOnX = 4;
-                    countOnY = 3;
-                    break;
+                    return new GridSize(4, 2, 0.5);
                 case 15:
-                    countOnX = 5;
-                    countOnY = 3;
-                    break;
+                    return new GridSize(5, 3, 0.5);
                 case 13:
                 case 14:
                 case 16:
-                    countOnX = 4;
-                    countOnY = 4;
-                    break;
+                    return new GridSize(4, 4, 0.5);
                 case 17:
                 case 18:
                 case 19:
                 case 20:
-                    countOnX = 5;
-                    countOnY = 4;
-                    break;
-                default:
-                    countOnX = countOnY = (int)Math.Ceiling(numberOfFiles / 2.0);
-                    break;
+                    return new GridSize(5, 4, 0.5);
             }
-            return new Size(countOnX, countOnY);
+            var size = (int)Math.Ceiling(numberOfFiles / 2.0);
+            return new GridSize(size, size, 0.5);
         }
     }
 }

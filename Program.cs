@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 
 namespace QtmVideoGridRender
 {
@@ -23,6 +24,14 @@ namespace QtmVideoGridRender
             Center
         }
 
+        static string[] FindAviFilesForDifferentCameras(string directory, string filenameWithoutExtension)
+        {
+            var aviFilesOqus = Directory.GetFiles(directory, filenameWithoutExtension + "_Oqus*.avi");
+            var aviFilesMiqus = Directory.GetFiles(directory, filenameWithoutExtension + "_Miqus*.avi");
+            var aviFilesArqus = Directory.GetFiles(directory, filenameWithoutExtension + "_Arqus*.avi");
+            return aviFilesOqus.Concat(aviFilesMiqus).Concat(aviFilesArqus).ToArray();
+        }
+
         static void Main(string[] args)
         {
             try
@@ -33,21 +42,20 @@ namespace QtmVideoGridRender
                     var fullpath = Path.GetFullPath(filename);
                     var directory = Path.GetDirectoryName(fullpath);
                     
-                    var filenamewithoutext = Path.GetFileNameWithoutExtension(filename);
-                    var outputfilename = filenamewithoutext + ".avi";
+                    var filenameWithoutExtension = Path.GetFileNameWithoutExtension(filename);
+                    var outputfilename = filenameWithoutExtension + ".avi";
                     var outputfilepath = Path.Combine(directory, outputfilename);
 
                     if (!File.Exists(outputfilepath))
                     {
-                        // TODO::: Allow for Oqus, Arqus video files too
-                        var avifiles = Directory.GetFiles(directory, filenamewithoutext + "_Miqus*.avi");
-                        if (avifiles.Length == 0)
+                        var aviFiles = FindAviFilesForDifferentCameras(directory, filenameWithoutExtension);
+                        if (aviFiles.Length == 0)
                         {
                             Console.WriteLine("No avi files available for: " + filename);
                             continue;
                         }
                         Console.WriteLine("Starting to process: " + filename);
-                        ProcessAViFiles(outputfilepath, avifiles);
+                        ProcessAViFiles(outputfilepath, aviFiles);
                     }
                     else
                     {
@@ -63,7 +71,7 @@ namespace QtmVideoGridRender
             }
         }
 
-        class AviFileInfo
+        class AviFileInfo : IDisposable
         {
             public int hour;
             public int minute;
@@ -74,6 +82,39 @@ namespace QtmVideoGridRender
             public DateTime time;
             public double framecounter;
             public double timecodeFrequency;
+            private bool disposedValue;
+
+            protected virtual void Dispose(bool disposing)
+            {
+                if (!disposedValue)
+                {
+                    if (disposing)
+                    {
+                        // Dispose managed state (managed objects)
+                    }
+
+                    if (reader != null)
+                    {
+                        reader.Dispose();
+                        reader = null;
+                    }
+
+                    disposedValue = true;
+                }
+            }
+
+            ~AviFileInfo()
+            {
+                // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+                Dispose(disposing: false);
+            }
+
+            public void Dispose()
+            {
+                // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+                Dispose(disposing: true);
+                GC.SuppressFinalize(this);
+            }
         }
 
         /// <summary>
@@ -107,7 +148,7 @@ namespace QtmVideoGridRender
 
             return destImage;
         }
-        private static void ProcessAViFiles(string outputfilename, string[] avifiles)
+        private static void ProcessAViFiles(string outputfilename, string[] aviFiles)
         {
             Size largestResolution = new Size();
             long maxLength = 0;
@@ -121,76 +162,73 @@ namespace QtmVideoGridRender
             Font timecodeTextFont = new Font("Tahoma", 70);
             TimecodePosition timecodePosition = TimecodePosition.Center;
 
-            foreach (var file in avifiles)
+            foreach (var file in aviFiles)
             {
                 try
                 {
                     AviFileInfo afi = new AviFileInfo();
-                    if (timecodeFoundIndex < 0)
+                    using (var tagFile = TagLib.File.Create(file))
                     {
-                        using (var tagFile = TagLib.File.Create(file))
+                        if (tagFile != null)
                         {
-                            if (tagFile != null)
+                            int hour = 0;
+                            int minute = 0;
+                            int second = 0;
+                            int frame = 0;
+                            var tags = tagFile.Tag;
+                            if (!string.IsNullOrEmpty(tags.Timecode))
                             {
-                                int hour = 0;
-                                int minute = 0;
-                                int second = 0;
-                                int frame = 0;
-                                var tags = tagFile.Tag;
-                                if (!string.IsNullOrEmpty(tags.Timecode))
+                                try
                                 {
-                                    try
-                                    {
-                                        Console.WriteLine("Reading timecode (" + tags.Timecode + ") tag in: " + file);
-                                        var parts = tags.Timecode.Split(':');
-                                        if (parts.Length > 0)
-                                            hour = int.Parse(parts[0]);
-                                        if (parts.Length > 1)
-                                            minute = int.Parse(parts[1]);
-                                        if (parts.Length > 2)
-                                            second = int.Parse(parts[2]);
-                                        if (parts.Length > 3)
-                                            frame = int.Parse(parts[3]);
-                                        timecodeFoundIndex = afis.Count;
-                                    }
-                                    catch(Exception)
-                                    {
-                                        hour = 0;
-                                        minute = 0;
-                                        second = 0;
-                                        frame = 0;
-                                    }
+                                    Console.WriteLine("Reading timecode (" + tags.Timecode + ") tag in: " + file);
+                                    var parts = tags.Timecode.Split(':');
+                                    if (parts.Length > 0)
+                                        hour = int.Parse(parts[0]);
+                                    if (parts.Length > 1)
+                                        minute = int.Parse(parts[1]);
+                                    if (parts.Length > 2)
+                                        second = int.Parse(parts[2]);
+                                    if (parts.Length > 3)
+                                        frame = int.Parse(parts[3]);
+                                    timecodeFoundIndex = afis.Count;
                                 }
-                                else
+                                catch(Exception)
                                 {
-                                    Console.WriteLine("No timecode found in: " + file);
+                                    hour = 0;
+                                    minute = 0;
+                                    second = 0;
+                                    frame = 0;
                                 }
-                                afi.hour = hour;
-                                afi.minute = minute;
-                                afi.second = second;
-                                afi.frame = frame;
-                                afi.time = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, afi.hour, afi.minute, afi.second);
-
-                                double timecodeFrequency = 30;
-                                if (!string.IsNullOrEmpty(tags.TimecodeFrequency))
-                                {
-                                    Console.WriteLine("Reading timecode frequency (" + tags.TimecodeFrequency + ") tag in: " + file);
-                                    try
-                                    {
-                                        timecodeFrequency = double.Parse(tags.TimecodeFrequency);
-                                    }
-                                    catch (Exception)
-                                    {
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine("No timecode frequency found in: " + file);
-                                }
-
-                                afi.timecodeFrequency = timecodeFrequency;
-                                afi.filename = file;
                             }
+                            else
+                            {
+                                Console.WriteLine("No timecode found in: " + file);
+                            }
+                            afi.hour = hour;
+                            afi.minute = minute;
+                            afi.second = second;
+                            afi.frame = frame;
+                            afi.time = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, afi.hour, afi.minute, afi.second);
+
+                            double timecodeFrequency = 30;
+                            if (!string.IsNullOrEmpty(tags.TimecodeFrequency))
+                            {
+                                Console.WriteLine("Reading timecode frequency (" + tags.TimecodeFrequency + ") tag in: " + file);
+                                try
+                                {
+                                    timecodeFrequency = double.Parse(tags.TimecodeFrequency);
+                                }
+                                catch (Exception)
+                                {
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No timecode frequency found in: " + file);
+                            }
+
+                            afi.timecodeFrequency = timecodeFrequency;
+                            afi.filename = file;
                         }
                     }
                     var reader = new VideoFileReader();
@@ -230,7 +268,7 @@ namespace QtmVideoGridRender
                 double timestampCounter = 0;
 
                 // Determine how many rows and columns it should contain
-                Size gridSize = GetOutputGridSizes(avifiles.Length);
+                Size gridSize = GetOutputGridSizes(aviFiles.Length);
 
                 // TODO::: Be able to specify output size and resize all bitmaps accordingly.
                 Size outputSize = new Size(largestResolution.Width * gridSize.Width, largestResolution.Height * gridSize.Height);
@@ -243,11 +281,15 @@ namespace QtmVideoGridRender
                 writer.Height = largestResolution.Height * gridSize.Height;
                 writer.FrameRate = new Rational(maxFrameRate);
                 writer.BitRate = minBitRate;
-                writer.VideoCodec = VideoCodec.H264;
+                writer.VideoCodec = VideoCodec.Mpeg4;// H264;
                 writer.AudioCodec = AudioCodec.None;
                 writer.Open(outputfilename);
 
+
                 Bitmap[] bitmaps = new Bitmap[afis.Count];
+
+                var bigBitmap = new Bitmap(outputSize.Width, outputSize.Height);
+                Graphics graphicsContext = Graphics.FromImage(bigBitmap);
 
                 int frameNumberToWrite = 0;
                 while (frameNumberToWrite++ < maxLength)
@@ -298,71 +340,77 @@ namespace QtmVideoGridRender
                         bitmaps[afiIndex] = bitmap;
                         afiIndex++;
                     }
-                    using (var bigBitmap = new Bitmap(outputSize.Width, outputSize.Height))
+
                     {
-                        using (Graphics g = Graphics.FromImage(bigBitmap))
+                        int coordx = 0;
+                        int coordy = 0;
+                        int indexOnLine = 1;
+                        for (int index = 0; index < afis.Count; index++)
                         {
-                            int coordx = 0;
-                            int coordy = 0;
-                            int indexOnLine = 1;
-                            for (int index = 0; index < afis.Count; index++)
+                            if (bitmaps[index] != null)
                             {
-                                if (bitmaps[index] != null)
-                                {
-                                    g.DrawImage(bitmaps[index], coordx, coordy);
-                                }
-                                coordx += afis[index].reader.Width;
-                                if (indexOnLine++ >= gridSize.Width)
-                                {
-                                    indexOnLine = 0;
-                                    coordx = 0;
-                                    coordy += afis[index].reader.Height;
-                                }
+                                graphicsContext.DrawImage(bitmaps[index], coordx, coordy);
                             }
-
-                            g.SmoothingMode = SmoothingMode.AntiAlias;
-                            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-
-                            string timeToWrite = (timecodeFoundIndex >= 0) ? string.Format($"{timestamp.ToString("HH:mm:ss")}.{timestampFrame:D2}") : string.Format($"{timestamp.ToString("HH:mm:ss")}");
-                            var size = g.MeasureString(timeToWrite, timecodeTextFont);
-                            RectangleF rect = new RectangleF(10, 10, size.Width, size.Height);
-                            if (timecodePosition == TimecodePosition.Center)
+                            coordx += afis[index].reader.Width;
+                            if (indexOnLine++ >= gridSize.Width)
                             {
-                                rect.X = (outputSize.Width / 2) - (size.Width / 2);
-                                rect.Y = (outputSize.Height / 2) - (size.Height / 2);
-                                rect.Width = size.Width;
-                                rect.Height = size.Height;
+                                indexOnLine = 0;
+                                coordx = 0;
+                                coordy += afis[index].reader.Height;
                             }
-                            g.FillRectangle(Brushes.Black, rect);
-                            g.DrawString(timeToWrite, timecodeTextFont, Brushes.White, rect);
-
-                            g.Flush();
                         }
 
-                        var timestampStep = timestampFrequency / maxFrameRate;
-                        timestampCounter += timestampStep;
-                        if (timestampCounter >= 1)
+                        graphicsContext.SmoothingMode = SmoothingMode.AntiAlias;
+                        graphicsContext.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        graphicsContext.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+
+                        string timeToWrite = (timecodeFoundIndex >= 0) ? string.Format($"{timestamp.ToString("HH:mm:ss")}.{timestampFrame:D2}") : string.Format($"{timestamp.ToString("HH:mm:ss")}");
+                        var size = graphicsContext.MeasureString(timeToWrite, timecodeTextFont);
+                        RectangleF rect = new RectangleF(10, 10, size.Width, size.Height);
+                        if (timecodePosition == TimecodePosition.Center)
                         {
-                            timestampFrame++;
-                            timestampCounter -= 1;
+                            rect.X = (outputSize.Width / 2) - (size.Width / 2);
+                            rect.Y = (outputSize.Height / 2) - (size.Height / 2);
+                            rect.Width = size.Width;
+                            rect.Height = size.Height;
                         }
-                        if (timestampFrame >= timestampFrequency)
-                        {
-                            timestampFrame = 0;
-                            timestamp = timestamp.AddSeconds(1);
-                        }
+                        graphicsContext.FillRectangle(Brushes.Black, rect);
+                        graphicsContext.DrawString(timeToWrite, timecodeTextFont, Brushes.White, rect);
 
-                        writer.WriteVideoFrame(bigBitmap);
+                        graphicsContext.Flush();
                     }
+
+                    var timestampStep = timestampFrequency / maxFrameRate;
+                    timestampCounter += timestampStep;
+                    if (timestampCounter >= 1)
+                    {
+                        timestampFrame++;
+                        timestampCounter -= 1;
+                    }
+                    if (timestampFrame >= timestampFrequency)
+                    {
+                        timestampFrame = 0;
+                        timestamp = timestamp.AddSeconds(1);
+                    }
+
+                    writer.WriteVideoFrame(bigBitmap);
+                    //bigBitmap.Save(outputfilename + "_" + frameNumberToWrite.ToString() + ".bmp");
                 }
                 writer.Close();
+                graphicsContext.Dispose();
+                bigBitmap.Dispose();
+                writer.Dispose();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
             }
+            foreach(var afi in afis)
+            {
+                afi.Dispose();
+            }
+            afis.Clear();
         }
 
         /// <summary>

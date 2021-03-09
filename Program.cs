@@ -192,7 +192,7 @@ namespace QtmVideoGridRender
                                         frame = int.Parse(parts[3]);
                                     timecodeFoundIndex = afis.Count;
                                 }
-                                catch(Exception)
+                                catch (Exception)
                                 {
                                     hour = 0;
                                     minute = 0;
@@ -281,7 +281,8 @@ namespace QtmVideoGridRender
                 writer.Height = outputSize.Height;
                 writer.FrameRate = new Rational(maxFrameRate);
                 writer.BitRate = minBitRate;
-                writer.VideoCodec = VideoCodec.Mpeg4;
+                writer.VideoCodec = VideoCodec.Mjpeg;
+                writer.PixelFormat = AVPixelFormat.FormatYuvj422P;
                 writer.AudioCodec = AudioCodec.None;
                 writer.Open(outputfilename);
 
@@ -403,16 +404,34 @@ namespace QtmVideoGridRender
                 graphicsContext.Dispose();
                 bigBitmap.Dispose();
                 writer.Dispose();
+
+                foreach (var afi in afis)
+                {
+                    afi.Dispose();
+                }
+
+                if (timecodeFoundIndex >= 0)
+                {
+                    timestampFrequency = afis[timecodeFoundIndex].timecodeFrequency;
+                    timestamp = afis[timecodeFoundIndex].time;
+                    timestampFrame = afis[timecodeFoundIndex].frame;
+
+                    using (var tagFile = TagLib.File.Create(outputfilename))
+                    {
+                        if (tagFile != null)
+                        {
+                            tagFile.Tag.Timecode = string.Format($"{timestamp.ToString("HH:mm:ss")}.{timestampFrame:D2}");
+//                            tagFile.Tag.TimecodeFrequency = ((int)timestampFrequency).ToString();
+                            tagFile.Save();
+                        }
+                    }
+                }
+                afis.Clear();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
             }
-            foreach(var afi in afis)
-            {
-                afi.Dispose();
-            }
-            afis.Clear();
         }
 
         class GridSize
